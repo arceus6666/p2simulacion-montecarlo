@@ -9,6 +9,8 @@ using System.Text;
 namespace p2simulacion_montecarlo {
 	class Program {
 
+		static string path;
+
 		internal class BoolInteger {
 			private bool value;
 			public BoolInteger(int val) {
@@ -69,6 +71,12 @@ namespace p2simulacion_montecarlo {
 
 		static int[] numeros = generate();
 
+		static bool salir = false;
+
+		static bool print = false;
+
+		static bool save = false;
+
 		private static int RandomNumber() {
 			int rnd = RND.Next(numeros.Length);
 			//Console.Write("rnd: " + rnd + "; ");
@@ -112,7 +120,7 @@ namespace p2simulacion_montecarlo {
 			return res;
 		}
 
-		public static object Eval(string sCSCode) {
+		public static object Eval(string sCSCode, string org) {
 
 			CSharpCodeProvider c = new CSharpCodeProvider();
 			ICodeCompiler icc = c.CreateCompiler();
@@ -147,7 +155,8 @@ namespace p2simulacion_montecarlo {
 
 			CompilerResults cr = icc.CompileAssemblyFromSource(cp, sb.ToString());
 			if(cr.Errors.Count > 0) {
-				Console.WriteLine("ERROR: " + cr.Errors[0].ErrorText + "\nError evaluating cs code");
+				//Console.WriteLine("ERROR: " + cr.Errors[0].ErrorText + "\nError evaluating cs code");
+				Console.WriteLine("ERROR !\n\tFunción *{0}* incorrecta", org);
 				return null;
 			}
 
@@ -161,7 +170,7 @@ namespace p2simulacion_montecarlo {
 			return s;
 		}
 
-		static void integral(int size, Func<double, double> f, int iter = 1000, bool print = false) {
+		static void integral(Func<double, double> f, int iteraciones = 500, int simulaciones = 1000) {
 
 			string[] blanks = {
 				"",
@@ -176,35 +185,42 @@ namespace p2simulacion_montecarlo {
 				"         "
 			};
 
-			double[] values = new double[iter];
+			string[] toPrint = new string[simulaciones];
 
-			for(int ii = 0; ii < iter; ii++) {
-				double[] nx = generateRandomSeries(size);
-				double[] ny = generateRandomSeries(size);
-				double[] nf = new double[size];
-				BoolInteger[] cond = new BoolInteger[size];
+			double[] values = new double[simulaciones];
 
-				for(int i = 0; i < size; i++) {
+			for(int ii = 0; ii < simulaciones; ii++) {
+				double[] nx = generateRandomSeries(iteraciones);
+				double[] ny = generateRandomSeries(iteraciones);
+				double[] nf = new double[iteraciones];
+				BoolInteger[] cond = new BoolInteger[iteraciones];
+
+				for(int i = 0; i < iteraciones; i++) {
+					//double fv = f(nx[i]);
+					//Console.WriteLine(fv);
+					//int val = (int) (fv * 10000);
 					int val = (int) (f(nx[i]) * 10000);
-					nf[i] = val / 10000;
+					//Console.WriteLine(val);
+					//Console.WriteLine(val / 10000);
+					nf[i] = (double) val / 10000;
 				}
 
-				for(int i = 0; i < size; i++) {
+				for(int i = 0; i < iteraciones; i++) {
 					cond[i] = new BoolInteger(ny[i] < nf[i]);
 				}
 
-				int count = 0;
+				double count = 0;
 				foreach(BoolInteger bi in cond) {
 					count += bi.GetIntValue();
 				}
 
-				if(print) {
+				if(print || save) {
 					string res = "+-----------------------------------------+\n";
 					res += $"|   Iteración {ii}{blanks[4 - (ii + "").Length]}                        |\n";
 					res += "+---------+---------+----------+----------+\n";
 					res += "|    X    |    Y    |   f(x)   |   Cond   |\n";
 					res += "+---------+---------+----------+----------+\n";
-					for(int i = 0; i < size; i++) {
+					for(int i = 0; i < iteraciones; i++) {
 						int snx = (nx[i] + "").Length;
 						int sny = (ny[i] + "").Length;
 						int snf = (nf[i] + "").Length;
@@ -212,24 +228,34 @@ namespace p2simulacion_montecarlo {
 						res += $"| {nx[i]}{blanks[8 - snx]}| {ny[i]}{blanks[8 - sny]}| {nf[i]}{blanks[8 - snf]}|   {c}    |\n";
 					}
 					res += "+---------+---------+----------+----------+\n";
-					Console.WriteLine(res);
+					if(print)
+						Console.WriteLine(res);
+					toPrint[ii] = res;
 				}
 
-				values[ii] = count / size;
+				values[ii] = count / iteraciones;
+				//Console.WriteLine(count);
+				//Console.WriteLine(count / iteraciones);
+				//Console.WriteLine(printArray(nx));
+				//Console.WriteLine(printArray(ny));
+				//Console.WriteLine(printArray(nf));
 			}
 
-			double a = 0;
+			if(save)
+				System.IO.File.WriteAllLines($@"{path}\integral.txt", toPrint);
+
+			double a = 0.0;
 			foreach(double v in values) {
 				a += v;
 			}
 
-			a /= iter;
+			a /= simulaciones;
 
 			Console.WriteLine("Área = {0}", a);
 
 		}
 
-		static void borracho(int size, int iter = 15, int end = 0, bool print = false) {
+		static void borracho(int iteraciones = 15, int simulaciones = 500, int end = 2) {
 			string[] blanks = {
 				"",
 				" ",
@@ -243,14 +269,16 @@ namespace p2simulacion_montecarlo {
 				"         "
 			};
 
-			BoolInteger[] values = new BoolInteger[iter];
+			BoolInteger[] values = new BoolInteger[simulaciones];
 
-			for(int ii = 0; ii < iter; ii++) {
-				double[] numerosr = generateRandomSeries(size);
+			string[] toPrint = new string[simulaciones];
+
+			for(int ii = 0; ii < simulaciones; ii++) {
+				double[] numerosr = generateRandomSeries(iteraciones);
 				int x = 0, y = 0;
-				int[] xx = new int[size];
-				int[] yy = new int[size];
-				for(int i = 0; i < size; i++) {
+				int[] xx = new int[iteraciones];
+				int[] yy = new int[iteraciones];
+				for(int i = 0; i < iteraciones; i++) {
 					double r = numerosr[i];
 					if(r < 0.25) {
 						x += 1;
@@ -264,12 +292,12 @@ namespace p2simulacion_montecarlo {
 					xx[i] = x;
 					yy[i] = y;
 				}
-				if(print) {
+				if(print || save) {
 					string res = "+------------------+-------+-------+\n";
-					res += $"| Prueba           |   X   |   Y   |\n";
+					res += $"| Prueba   {(ii + 1)}{blanks[3 - ((ii + 1) + "").Length]}     |   X   |   Y   |\n";
 					res += "+---------+--------+-------+-------+\n";
 					res += "| Inicio  |  NPSA  |   0   |   0   |\n";
-					for(int i = 0; i < size; i++) {
+					for(int i = 0; i < iteraciones; i++) {
 						//{i + 1}{blanks[3 - ((i + 1) + "").Length]}
 						string sy, sx;
 						int ny = yy[i], nx = xx[i];
@@ -289,70 +317,111 @@ namespace p2simulacion_montecarlo {
 						res += $"|   {i + 1}{blanks[3 - ((i + 1) + "").Length]}   | {numerosr[i]}{blanks[6 - (numerosr[i] + "").Length]} |  {sx}{nx}   |  {sy}{ny}   |\n";
 					}
 					res += "+---------+--------+-------+-------+\n";
-					Console.WriteLine(res);
+					if(print)
+						Console.WriteLine(res);
+					toPrint[ii] = res;
 				}
-				values[ii] = new BoolInteger(((x < 0 ? x * -1 : x) + (y < 0 ? y * -1 : y)) == end);
+				//Console.WriteLine("i: {0}; {1} {2} {3} {4}", ii, x, y, end, Math.Abs(x) + Math.Abs(y) == end);
+				values[ii] = new BoolInteger(Math.Abs(x) + Math.Abs(y) == end);
 			}
+			if(save)
+				System.IO.File.WriteAllLines($@"{path}\borracho.txt", toPrint);
+
 
 			double p = 0;
 			foreach(BoolInteger v in values) {
-				p += v.GetIntValue();
+				p += (double) v.GetIntValue();
+				//Console.WriteLine(v.GetIntValue());
 			}
-			p /= iter;
+			p /= simulaciones;
 			int e = (int) (p * 100);
+			//Console.WriteLine(p);
+			//Console.WriteLine(e);
 			Console.WriteLine("La probabilidad de éxito es {0}%", e);
 		}
 
-		static bool salir = false;
-
 		private static void menu() {
-			//double[] numeros = null;
 			Console.WriteLine("Escoja la opción deseada:");
-			//Console.WriteLine("\ta)\tGenerar serie.");
-			//Console.WriteLine("\tb)\tMostar serie.");
 			Console.WriteLine("\ta)\tFunción de Integral f(x).");
 			Console.WriteLine("\tb)\tBorracho Aleatorio.");
-			//Console.WriteLine("\te)\t.");
-			//Console.WriteLine("\tf)\tPrueba de Distribución de Poisson.");
+			Console.WriteLine("\tc)\tActivar Impresión de Simulaciones.");
+			Console.WriteLine("\td)\tActivar Guardado de Simulaciones.");
 			Console.WriteLine("\totro)\tSalir.");
 			Console.Write("Opción: ");
 			switch(Console.ReadLine()) {
 				case "a":
-					Console.Write("Introduzca la cantidad de iteraciones: ");
-					int size = int.Parse(Console.ReadLine());
+					Console.Write("Introduzca la cantidad de simulaciones (1000 por defecto): ");
+					string s = Console.ReadLine();
 					Console.WriteLine("Introduzca su función:");
-					Console.WriteLine("potencia como: a^b -> pow(a, b)");
-					Console.WriteLine("raíz como: √a -> sqrt(a)");
+					Console.WriteLine("potencia a^b -> pow(a, b)");
+					Console.WriteLine("raíz √a -> sqrt(a)");
 					Console.Write("f(x) = ");
 					string f = Console.ReadLine();
-					Func<double, double> fx = (Func<double, double>) Eval("(x) => " + f + ";");
-					integral(size, fx);
+					string ff = f;
+					f = f.Replace("pow", "Math.Pow");
+					f = f.Replace("sqrt", "Math.Sqrt");
+					Func<double, double> fx = (Func<double, double>) Eval($"(x) => {f};", ff);
+					if(s != "") {
+						int size = int.Parse(s);
+						integral(simulaciones: size, f: fx);
+					} else {
+						integral(f: fx);
+					}
 					break;
 				case "b":
-					Console.Write("Introduzca la cantidad de iteraciones: ");
-					size = int.Parse(Console.ReadLine());
-					//Console.Write("Introduzca la distancia final (si deja en blanco se utiliza 0): ");
-					//string es = Console.ReadLine();
-					//int end = es != "" ? int.Parse(es) : 0;
-					//borracho(size, iter:, end:, print);
-					borracho(size);
+					Console.Write("Introduzca la cantidad de simulaciones (500 por defecto): ");
+					s = Console.ReadLine();
+					Console.Write("Introduzca la distancia destino (2 por defecto): ");
+					string ss = Console.ReadLine();
+					if(s + ss == "") {
+						borracho();
+					} else if(s == "") {
+						int end = int.Parse(ss);
+						borracho(end: end);
+					} else if(ss == "") {
+						int size = int.Parse(s);
+						borracho(simulaciones: size);
+					} else {
+						int size = int.Parse(s);
+						int end = int.Parse(ss);
+						borracho(simulaciones: size, end: end);
+					}
 					break;
 				case "c":
-					
+					Console.Write("Activar impresiones? (s/n): ");
+					string r = Console.ReadLine();
+					if(r == "s") {
+						print = true;
+					} else {
+						print = false;
+					}
 					break;
 				case "d":
-					
+					Console.Write("Activar guardado? (s/n): ");
+					r = Console.ReadLine();
+					if(r == "s") {
+						Console.Write(
+							"{0} {1}: ",
+							"Introduzca la ruta donde desea guardar el archivo",
+							"(por defecto será utilizada la ruta de ejecución)"
+						);
+						string p = Console.ReadLine();
+						if(p != "") {
+							path = p;
+						} else {
+							path = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+						}
+						save = true;
+					} else {
+						save = false;
+					}
 					break;
-				case "e":
-					
-					break;
-				case "f":
-					
-					break;
-				case "g":
-
-
-					break;
+				//case "e":
+				//	break;
+				//case "f":
+				//	break;
+				//case "g":
+				//	break;
 				case "arc":
 					string ai = Console.ReadLine();
 					string[] nn = ai.Split(',');
@@ -365,7 +434,7 @@ namespace p2simulacion_montecarlo {
 				case "eval":
 					f = Console.ReadLine();
 					char[] separators = new char[] { '+', '-', '*', '/' };
-					Func<double, double> e = (Func<double, double>) Eval("(x) => " + f + ";");
+					Func<double, double> e = (Func<double, double>) Eval($"(x) => {f};", f);
 					Console.WriteLine(e(3));
 					break;
 				default:
@@ -376,11 +445,14 @@ namespace p2simulacion_montecarlo {
 		}
 
 		static void Main(string[] args) {
-			Console.WriteLine("***************************");
-			Console.WriteLine("*       Bienvenido        *");
-			Console.WriteLine("* Simulación - Práctica 2 *");
-			Console.WriteLine("* Daniel Mendoza          *");
-			Console.WriteLine("***************************\n");
+			Console.WriteLine("****************************");
+			Console.WriteLine("*        Bienvenido        *");
+			Console.WriteLine("* Simulación - Práctica 2  *");
+			Console.WriteLine("* Simulación de Montecarlo *");
+			Console.WriteLine("* Daniel Mendoza           *");
+			Console.WriteLine("****************************\n");
+			path = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+			//Console.WriteLine(path);
 			while(!salir) {
 				menu();
 			}
